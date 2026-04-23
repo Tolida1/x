@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests
 
 # --- AYARLAR ---
-MAIN_URL = "https://dizipal.bar" # Çalışmazsa güncel adresi buraya yazmalısın
+MAIN_URL = "https://dizipal.im" # Çalışmazsa güncel adresi buraya yazmalısın
 MAX_PAGE = 1 
 
 KATEGORILER = {

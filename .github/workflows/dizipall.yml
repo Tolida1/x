@@ -1,0 +1,34 @@
+name: DiziPal M3U Guncelleme
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Her gece saat 00:00'da otomatik çalışır
+  workflow_dispatch: # GitHub üzerinden manuel tetikleme butonu
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu Klonla
+        uses: actions/checkout@v3
+
+      - name: Python Kur
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Kütüphaneleri Yükle
+        run: |
+          pip install -r requirements.txt
+
+      - name: Scraper'ı Çalıştır
+        run: |
+          python dizipall.py
+
+      - name: M3U Dosyasını GitHub'a Kaydet
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add dizipal_full.m3u
+          git commit -m "M3U listesi güncellendi" || echo "Değişiklik yok"
+          git push

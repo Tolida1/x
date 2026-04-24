@@ -23,39 +23,52 @@ jobs:
       - name: Kütüphaneleri Yükle
         run: pip install requests
 
-      - name: M3U Dosyasını İndir (Kod Buraya Gömüldü)
+      - name: M3U Dosyasını İndir
         shell: python
         run: |
           import requests
+          import os
+          
+          # NOT: Eğer bu link hata verirse Dropbox'tan yeni bir 'Share' linki almalısın
           url = "https://uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com/cd/0/get/C_N5Qd5Ml9JIsKvL9n09PovrcWgUh7swH-YzyePGaKKl6HdGKYi3fTtGxfv1wpcegaqpBwOajjzG7gWKKy5c95XReJJiGkvr7wFJC-u72ax27r4Xgdnp0E5UFOC9UgttmMqubQLobb5jiUIz-W-lUsza/file?dl=1"
+          
           headers = {
               "User-Agent": "Mozilla/5.0 (Android)",
-              "If-None-Match": "1767621424276840d",
               "Host": "uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com",
               "Connection": "Keep-Alive",
               "Accept-Encoding": "gzip"
           }
+          
           try:
-              response = requests.get(url, headers=headers, timeout=30)
+              print("İstek gönderiliyor...")
+              response = requests.get(url, headers=headers, timeout=60)
+              
               if response.status_code == 200:
                   with open("tv.m3u", "wb") as f:
                       f.write(response.content)
-                  print("tv.m3u başarıyla oluşturuldu.")
-              elif response.status_code == 304:
-                  print("Dosya zaten güncel (304).")
+                  print(f"Başarılı! Dosya boyutu: {len(response.content)} byte")
               else:
-                  print(f"Hata Kodu: {response.status_code}")
+                  print(f"Sunucu hata döndürdü: {response.status_code}")
+                  # Hata olsa bile boş dosya oluşturup 'git add' hatasını engelleyelim
+                  if not os.path.exists("tv.m3u"):
+                      open("tv.m3u", "a").close()
           except Exception as e:
-              print(f"Hata: {e}")
+              print(f"Bağlantı hatası: {e}")
+              if not os.path.exists("tv.m3u"):
+                  open("tv.m3u", "a").close()
 
       - name: Değişiklikleri Kaydet ve Pushla
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
+          
+          # Dosya var mı kontrol et, yoksa boş oluştur (Hata almamak için)
+          touch tv.m3u
+          
           git add tv.m3u
           if git diff --cached --quiet; then
-            echo "Değişiklik yok."
+            echo "Değişiklik yok, pushlanmıyor."
           else
-            git commit -m "Oto-güncelleme: tv.m3u yüklendi"
+            git commit -m "Oto-güncelleme: tv.m3u güncellendi"
             git push
           fi

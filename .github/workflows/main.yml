@@ -1,12 +1,12 @@
 name: M3U Otomatik Guncelleyici
 
 on:
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch: # Manuel calistirma butonu
   schedule:
-    - cron: '0 */6 * * *' # Her 6 saatte bir çalışır
+    - cron: '0 */6 * * *' # Her 6 saatte bir otomatik calisir
 
 jobs:
-  update-m3u:
+  update-list:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -20,7 +20,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Requests Kütüphanesini Yükle
+      - name: Bagimliliklari Yukle
         run: pip install requests
 
       - name: M3U Dosyasını İndir
@@ -29,31 +29,33 @@ jobs:
           import requests
           import os
 
-          # ÖNEMLİ: Dropbox'tan aldığın 'Share' linkini buraya koy.
-          # Linkin sonu mutlaka ?dl=1 ile bitmeli.
-          url = "https://www.dropbox.com/s/SizinDosyaID/dosyaadi.m3u?dl=1"
+          # ÖNEMLİ: Buraya Dropbox'tan aldığın yeni ?dl=1 linkini koy
+          url = "https://www.dropbox.com/s/SizinDosyaIDniz/tv.m3u?dl=1"
           
+          # Senin paylaştığın tüm özel header bilgileri
           headers = {
               "User-Agent": "Mozilla/5.0 (Android)",
               "Accept-Encoding": "gzip",
-              "Connection": "keep-alive"
+              "Connection": "Keep-Alive",
+              "Host": "uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com"
           }
 
           try:
-              print("Dosya indiriliyor...")
-              # allow_redirects=True sayesinde Dropbox'ın yönlendirmelerini takip eder
+              print("Bağlantı kuruluyor...")
+              # allow_redirects=True: Dropbox'ın dosyayı yönlendirmesine izin verir
               response = requests.get(url, headers=headers, timeout=60, allow_redirects=True)
               
               if response.status_code == 200:
-                  # Dosyanın gerçekten veri içerip içermediğini kontrol et (en az 100kb)
-                  if len(response.content) > 102400:
+                  # Gerçek bir m3u dosyası en az 1-2 MB olur. 
+                  # 100 KB'dan küçükse hata sayfası inmiş demektir.
+                  if len(response.content) > 102400: 
                       with open("tv.m3u", "wb") as f:
                           f.write(response.content)
-                      print(f"Başarılı! Dosya boyutu: {len(response.content)} byte.")
+                      print(f"Başarılı! Dosya boyutu: {len(response.content)} byte")
                   else:
-                      print("Hata: İndirilen dosya çok küçük veya boş. Yazma yapılmadı.")
+                      print("Hata: İndirilen içerik çok küçük. Link muhtemelen hata sayfasına yönlendi.")
               else:
-                  print(f"Hata: Sunucu {response.status_code} kodu döndürdü. Link patlamış olabilir.")
+                  print(f"Hata: Sunucu {response.status_code} kodu döndürdü.")
           except Exception as e:
               print(f"Bağlantı hatası: {e}")
 
@@ -62,15 +64,15 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Dosya indirilmemişse boş dosya hatası almamak için kontrol
-          if [ -f tv.m3u ]; then
+          # Dosya varsa ve boyutu 0'dan büyükse işlemleri yap
+          if [ -s tv.m3u ]; then
             git add tv.m3u
             if git diff --cached --quiet; then
-              echo "Herhangi bir değişiklik tespit edilmedi."
+              echo "Değişiklik yok, dosya aynı."
             else
-              git commit -m "Oto-Güncelleme: tv.m3u yenilendi"
+              git commit -m "Oto-Güncelleme: tv.m3u güncellendi"
               git push
             fi
           else
-            echo "Dosya bulunamadı, işlem iptal."
+            echo "Hatalı veya boş dosya, reponun bozulmaması için pushlanmadı."
           fi

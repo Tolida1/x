@@ -1,125 +1,91 @@
 import requests
 import json
-import re
-import concurrent.futures
 import time
-from urllib.parse import urljoin
+import concurrent.futures
 
 # ==================== AYARLAR ====================
-TIMEOUT = 20
-MAX_WORKERS = 10 
-FILE_SERIES = 'yerli_diziler_guncel.m3u'
+DOMAIN = "https://a.prectv70.lol"
+# Senin paylaştığın en güncel anahtar
+SW_KEY = "4F5A9C3D9A86FA54EACEDDD635185/c3c5bd17-e37b-4b94-a944-8a3688a30452"
+CATEGORI_ID = "23" # Yerli Dizi / Film
+FILE_NAME = "yerli_dizi_arsivi.m3u"
 
-class RecTVScraper:
+HEADERS = {
+    'User-Agent': 'Dart/3.7 (dart:io)',
+    'Accept-Encoding': 'gzip'
+}
+
+class RecTVPro:
     def __init__(self):
-        # Kotlin dosyasındaki güncel Header yapısı
-        self.headers = {
-            'User-Agent': 'Dart/3.7 (dart:io)',
-            'Referer': 'https://twitter.com/'
-        }
-        # Kotlin dosyasındaki en güncel bilgiler
-        self.main_url = "https://m.prectv50.sbs" 
-        self.sw_key = "4F5A9C3D9A86FA54EACEDDD635185/64f9535b-bd2e-4483-b234-89060b1e631c"
-        
-        self.series_buffer = ["#EXTM3U"]
-        self.total_links = 0
+        self.buffer = ["#EXTM3U"]
+        self.counter = 0
 
-    def log(self, message):
-        print(f"[{time.strftime('%H:%M:%S')}] {message}")
-
-    def fetch_episode_details(self, serie_item):
-        """Detayları çeker: Sadece Yerli (23) olanların TÜM kaynaklarını alır"""
+    def get_links(self, serie):
+        """Her dizinin içine girip bölümleri toplar"""
+        s_id = serie.get('id')
+        s_title = serie.get('title')
+        s_image = serie.get('image')
         
-        # Yerli Filtresi (id: 23 genelde yerli dizilerdir)
-        genres = serie_item.get('genres', [])
-        is_yerli = any(genre.get('id') == 23 for genre in genres)
-        
-        # Eğer türler içinde 23 yoksa ama başlıkta "Yerli" geçiyorsa yine de alalım (Garantici yöntem)
-        if not is_yerli and "yerli" not in serie_item.get('title', '').lower():
-            return []
-
-        serie_id = serie_item.get('id')
-        title = serie_item.get('title', 'Bilinmeyen')
-        image = serie_item.get('image', '')
-        
-        local_entries = []
-        # Kotlin kodundaki detay çekme URL yapısı
-        url = f"{self.main_url}/api/season/by/serie/{serie_id}/{self.sw_key}"
+        # Detay API linkini oluşturuyoruz
+        detail_url = f"{DOMAIN}/api/season/by/serie/{s_id}/{SW_KEY}"
         
         try:
-            r = requests.get(url, headers=self.headers, timeout=TIMEOUT, verify=False)
-            if r.status_code != 200: return []
+            r = requests.get(detail_url, headers=HEADERS, timeout=15, verify=False)
+            if r.status_code != 200: return
+            
             seasons = r.json()
-            
-            if not seasons or not isinstance(seasons, list): return []
-
             for season in seasons:
-                season_name = season.get('title', 'Sezon')
-                episodes = season.get('episodes', [])
-                
-                for ep in episodes:
-                    ep_title = ep.get('title', 'Bölüm')
-                    for source in ep.get('sources', []):
-                        src_url = source.get('url')
-                        quality = source.get('quality', 'HD').upper()
+                s_name = season.get('title', 'Sezon')
+                for episode in season.get('episodes', []):
+                    e_title = episode.get('title', 'Bölüm')
+                    for source in episode.get('sources', []):
+                        url = source.get('url')
+                        quality = source.get('quality', 'HD')
                         
-                        if src_url:
-                            full_title = f"{title} - {season_name} - {ep_title} [{quality}]"
+                        if url:
+                            full_name = f"{s_title} - {s_name} - {e_title} [{quality}]"
                             entry = (
-                                f'#EXTINF:-1 tvg-logo="{image}" group-title="Yerli Diziler", {full_title}\n'
-                                f'{src_url}'
+                                f'#EXTINF:-1 tvg-logo="{s_image}" group-title="Yerli Diziler", {full_name}\n'
+                                f'{url}'
                             )
-                            local_entries.append(entry)
+                            self.buffer.append(entry)
+                            self.counter += 1
         except:
-            return []
-            
-        return local_entries
+            pass
 
     def run(self):
-        self.log(f"Güncel bilgilerle tarama başlıyor: {self.main_url}")
+        print(f"[*] Tarama Başlıyor: {DOMAIN}")
         page = 0
         
         while True:
-            # API URL: Yerli kategorisi (23) için istek atıyoruz
-            url = f"{self.main_url}/api/serie/by/filtres/23/created/{page}/{self.sw_key}"
+            # Liste API linki
+            list_url = f"{DOMAIN}/api/serie/by/filtres/{CATEGORI_ID}/created/{page}/{SW_KEY}"
+            print(f"[>] Sayfa {page} taranıyor...")
             
             try:
-                r = requests.get(url, headers=self.headers, timeout=TIMEOUT, verify=False)
+                r = requests.get(list_url, headers=HEADERS, timeout=15, verify=False)
+                series = r.json()
                 
-                if r.status_code != 200:
-                    self.log(f"Sayfa {page} alınamadı (Kod: {r.status_code}). Bitiyor olabilir.")
+                if not series or len(series) == 0:
                     break
                 
-                series_list = r.json()
-                if not series_list:
-                    self.log("İçerik bitti.")
-                    break
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                    futures = [executor.submit(self.fetch_episode_details, s) for s in series_list]
-                    for future in concurrent.futures.as_completed(futures):
-                        res = future.result()
-                        if res:
-                            self.series_buffer.extend(res)
-                            self.total_links += len(res)
-
-                self.log(f"Sayfa {page} tamamlandı. Eklenen Link: {self.total_links}")
+                # Dizileri paralel işle (Hız için)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    executor.map(self.get_links, series)
+                
+                print(f"[+] Şu ana kadar {self.counter} link toplandı.")
                 page += 1
                 
             except Exception as e:
-                self.log(f"Hata oluştu: {e}")
+                print(f"[!] Hata: {e}")
                 break
 
-        # Dosyayı yazdır
-        if self.total_links > 0:
-            with open(FILE_SERIES, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(self.series_buffer))
-            self.log(f"İŞLEM BAŞARILI! {self.total_links} link '{FILE_SERIES}' dosyasına kaydedildi.")
-        else:
-            self.log("HATA: Hiç link bulunamadı. Lütfen internetini ve site adresini kontrol et.")
+        # Dosyaya Yaz
+        with open(FILE_NAME, "w", encoding="utf-8") as f:
+            f.write("\n".join(self.buffer))
+        print(f"\n[OK] İşlem bitti! {self.counter} link '{FILE_NAME}' dosyasına kaydedildi.")
 
 if __name__ == "__main__":
-    # SSL uyarılarını kapat (Hız ve sorunsuz bağlantı için)
     requests.packages.urllib3.disable_warnings()
-    scraper = RecTVScraper()
-    scraper.run()
+    app = RecTVPro()
+    app.run()

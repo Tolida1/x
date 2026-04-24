@@ -2,16 +2,17 @@ name: Dizi Guncelleyici
 
 on:
   schedule:
-    # Her 6 saatte bir çalışır
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # Manuel çalıştırma butonu ekler
+    - cron: '0 */6 * * *' # 6 saatte bir otomatik çalışır
+  workflow_dispatch: # Manuel çalıştırma butonu
 
 jobs:
   scrape_series:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Yazma izni şart
 
     steps:
-      - name: Kodları Çek (Checkout)
+      - name: Kodları Çek
         uses: actions/checkout@v3
 
       - name: Python Kurulumu
@@ -20,17 +21,13 @@ jobs:
           python-version: '3.9'
 
       - name: Gereksinimleri Yükle
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+        run: pip install requests
 
       - name: Scraper Kodunu Çalıştır
         run: python diziler.py
 
-      - name: Dosyayı Commit ve Push Yap
+      - name: Dosyaları Commit ve Push Yap
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Otomatik Dizi Listesi Güncellemesi"
-          file_pattern: "diziler.m3u"
-          # Eğer ana dalın 'master' ise aşağıyı 'master' yap, 'main' ise 'main' kalsın
-          branch: main 
+          commit_message: "Otomatik Dizi Listesi Guncellemesi (Parcali)"
+          file_pattern: "*.m3u" # Tüm m3u dosyalarını otomatik yükler

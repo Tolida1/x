@@ -1,33 +1,40 @@
-name: Dizi Guncelleyici
+name: M3U Otomatik Guncelleme
 
 on:
+  workflow_dispatch: # Manuel başlatmak için
   schedule:
-    - cron: '0 */6 * * *' # 6 saatte bir otomatik çalışır
-  workflow_dispatch: # Manuel çalıştırma butonu
+    - cron: '0 */6 * * *' # Her 6 saatte bir otomatik kontrol eder
 
 jobs:
-  scrape_series:
+  update-list:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Yazma izni şart
+      contents: write # Repoya yazma izni verir
 
     steps:
-      - name: Kodları Çek
-        uses: actions/checkout@v3
+      - name: Depoyu Klonla
+        uses: actions/checkout@v4
 
-      - name: Python Kurulumu
-        uses: actions/setup-python@v4
+      - name: Python Kur
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
-      - name: Gereksinimleri Yükle
+      - name: Kütüphaneleri Yükle
         run: pip install requests
 
-      - name: Scraper Kodunu Çalıştır
-        run: python diziler.py
+      - name: M3U Dosyasını İndir
+        run: python download_m3u.py
 
-      - name: Dosyaları Commit ve Push Yap
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Otomatik Dizi Listesi Guncellemesi (Parcali)"
-          file_pattern: "*.m3u" # Tüm m3u dosyalarını otomatik yükler
+      - name: Değişiklikleri Kaydet ve Pushla
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add tv.m3u
+          # Eğer dosya değişmişse commit at ve pushla
+          if git diff --cached --quiet; then
+            echo "Herhangi bir değişiklik yok, işlem atlanıyor."
+          else
+            git commit -m "Otomatik Güncelleme: tv.m3u yenilendi"
+            git push
+          fi

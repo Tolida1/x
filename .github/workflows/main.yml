@@ -1,15 +1,15 @@
 name: M3U Otomatik Guncelleme
 
 on:
-  workflow_dispatch: # Manuel başlatmak için
+  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # Her 6 saatte bir otomatik kontrol eder
+    - cron: '0 */6 * * *'
 
 jobs:
   update-list:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Repoya yazma izni verir
+      contents: write
 
     steps:
       - name: Depoyu Klonla
@@ -23,18 +23,39 @@ jobs:
       - name: Kütüphaneleri Yükle
         run: pip install requests
 
-      - name: M3U Dosyasını İndir
-        run: python download_m3u.py
+      - name: M3U Dosyasını İndir (Kod Buraya Gömüldü)
+        shell: python
+        run: |
+          import requests
+          url = "https://uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com/cd/0/get/C_N5Qd5Ml9JIsKvL9n09PovrcWgUh7swH-YzyePGaKKl6HdGKYi3fTtGxfv1wpcegaqpBwOajjzG7gWKKy5c95XReJJiGkvr7wFJC-u72ax27r4Xgdnp0E5UFOC9UgttmMqubQLobb5jiUIz-W-lUsza/file?dl=1"
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Android)",
+              "If-None-Match": "1767621424276840d",
+              "Host": "uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com",
+              "Connection": "Keep-Alive",
+              "Accept-Encoding": "gzip"
+          }
+          try:
+              response = requests.get(url, headers=headers, timeout=30)
+              if response.status_code == 200:
+                  with open("tv.m3u", "wb") as f:
+                      f.write(response.content)
+                  print("tv.m3u başarıyla oluşturuldu.")
+              elif response.status_code == 304:
+                  print("Dosya zaten güncel (304).")
+              else:
+                  print(f"Hata Kodu: {response.status_code}")
+          except Exception as e:
+              print(f"Hata: {e}")
 
       - name: Değişiklikleri Kaydet ve Pushla
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add tv.m3u
-          # Eğer dosya değişmişse commit at ve pushla
           if git diff --cached --quiet; then
-            echo "Herhangi bir değişiklik yok, işlem atlanıyor."
+            echo "Değişiklik yok."
           else
-            git commit -m "Otomatik Güncelleme: tv.m3u yenilendi"
+            git commit -m "Oto-güncelleme: tv.m3u yüklendi"
             git push
           fi

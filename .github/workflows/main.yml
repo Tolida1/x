@@ -1,4 +1,4 @@
-name: M3U Otomatik Guncelleme
+name: M3U Guncelleyici
 
 on:
   workflow_dispatch:
@@ -6,13 +6,13 @@ on:
     - cron: '0 */6 * * *'
 
 jobs:
-  update-list:
+  download_m3u:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Depoyu Klonla
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Python Kur
@@ -20,55 +20,51 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Kütüphaneleri Yükle
+      - name: Bagimliliklari Yukle
         run: pip install requests
 
-      - name: M3U Dosyasını İndir
+      - name: M3U Indir ve Dogrula
         shell: python
         run: |
           import requests
           import os
-          
-          # NOT: Eğer bu link hata verirse Dropbox'tan yeni bir 'Share' linki almalısın
+
+          # Görseldeki güncel URL
           url = "https://uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com/cd/0/get/C_N5Qd5Ml9JIsKvL9n09PovrcWgUh7swH-YzyePGaKKl6HdGKYi3fTtGxfv1wpcegaqpBwOajjzG7gWKKy5c95XReJJiGkvr7wFJC-u72ax27r4Xgdnp0E5UFOC9UgttmMqubQLobb5jiUIz-W-lUsza/file?dl=1"
           
           headers = {
               "User-Agent": "Mozilla/5.0 (Android)",
-              "Host": "uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com",
-              "Connection": "Keep-Alive",
-              "Accept-Encoding": "gzip"
+              "Accept-Encoding": "gzip",
+              "Connection": "keep-alive"
           }
-          
+
           try:
-              print("İstek gönderiliyor...")
+              print("Dosya çekiliyor...")
               response = requests.get(url, headers=headers, timeout=60)
               
-              if response.status_code == 200:
+              # Görseldeki Content-Length: 2576633 civarı olmalı
+              content_size = len(response.content)
+              
+              if response.status_code == 200 and content_size > 1000000:
                   with open("tv.m3u", "wb") as f:
                       f.write(response.content)
-                  print(f"Başarılı! Dosya boyutu: {len(response.content)} byte")
+                  print(f"Başarılı! İndirilen boyut: {content_size} byte")
               else:
-                  print(f"Sunucu hata döndürdü: {response.status_code}")
-                  # Hata olsa bile boş dosya oluşturup 'git add' hatasını engelleyelim
+                  print(f"Hata: Beklenen boyut alınamadı. Alınan: {content_size} byte. Durum: {response.status_code}")
+                  # Hata durumunda boş dosya oluşturup akışı bozmayalım
                   if not os.path.exists("tv.m3u"):
                       open("tv.m3u", "a").close()
           except Exception as e:
-              print(f"Bağlantı hatası: {e}")
-              if not os.path.exists("tv.m3u"):
-                  open("tv.m3u", "a").close()
+              print(f"Hata oluştu: {e}")
 
-      - name: Değişiklikleri Kaydet ve Pushla
+      - name: Git Push
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          
-          # Dosya var mı kontrol et, yoksa boş oluştur (Hata almamak için)
-          touch tv.m3u
-          
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
           git add tv.m3u
           if git diff --cached --quiet; then
-            echo "Değişiklik yok, pushlanmıyor."
+            echo "Değişiklik yok."
           else
-            git commit -m "Oto-güncelleme: tv.m3u güncellendi"
+            git commit -m "M3U Listesi Güncellendi (${{ github.run_number }})"
             git push
           fi

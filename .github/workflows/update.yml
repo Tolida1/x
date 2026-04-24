@@ -1,0 +1,33 @@
+name: M3U Auto Split Update
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # her gün 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repo çek
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Paket yükle
+        run: pip install -r requirements.txt
+
+      - name: M3U split çalıştır
+        run: python split.py
+
+      - name: Git commit + push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Auto update M3U split" || exit 0
+          git push

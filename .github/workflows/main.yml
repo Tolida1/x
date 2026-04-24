@@ -1,18 +1,18 @@
-name: M3U Guncelleyici
+name: M3U Otomatik Guncelleyici
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manuel başlatma butonu
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *' # Her 6 saatte bir çalışır
 
 jobs:
-  download_m3u:
+  update-m3u:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout
+      - name: Repoyu Klonla
         uses: actions/checkout@v4
 
       - name: Python Kur
@@ -20,17 +20,18 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Bagimliliklari Yukle
+      - name: Requests Kütüphanesini Yükle
         run: pip install requests
 
-      - name: M3U Indir ve Dogrula
+      - name: M3U Dosyasını İndir
         shell: python
         run: |
           import requests
           import os
 
-          # Görseldeki güncel URL
-          url = "https://uc0918e4d42505e97508ad1cf6a1.dl.dropboxusercontent.com/cd/0/get/C_N5Qd5Ml9JIsKvL9n09PovrcWgUh7swH-YzyePGaKKl6HdGKYi3fTtGxfv1wpcegaqpBwOajjzG7gWKKy5c95XReJJiGkvr7wFJC-u72ax27r4Xgdnp0E5UFOC9UgttmMqubQLobb5jiUIz-W-lUsza/file?dl=1"
+          # ÖNEMLİ: Dropbox'tan aldığın 'Share' linkini buraya koy.
+          # Linkin sonu mutlaka ?dl=1 ile bitmeli.
+          url = "https://www.dropbox.com/s/SizinDosyaID/dosyaadi.m3u?dl=1"
           
           headers = {
               "User-Agent": "Mozilla/5.0 (Android)",
@@ -39,32 +40,37 @@ jobs:
           }
 
           try:
-              print("Dosya çekiliyor...")
-              response = requests.get(url, headers=headers, timeout=60)
+              print("Dosya indiriliyor...")
+              # allow_redirects=True sayesinde Dropbox'ın yönlendirmelerini takip eder
+              response = requests.get(url, headers=headers, timeout=60, allow_redirects=True)
               
-              # Görseldeki Content-Length: 2576633 civarı olmalı
-              content_size = len(response.content)
-              
-              if response.status_code == 200 and content_size > 1000000:
-                  with open("tv.m3u", "wb") as f:
-                      f.write(response.content)
-                  print(f"Başarılı! İndirilen boyut: {content_size} byte")
+              if response.status_code == 200:
+                  # Dosyanın gerçekten veri içerip içermediğini kontrol et (en az 100kb)
+                  if len(response.content) > 102400:
+                      with open("tv.m3u", "wb") as f:
+                          f.write(response.content)
+                      print(f"Başarılı! Dosya boyutu: {len(response.content)} byte.")
+                  else:
+                      print("Hata: İndirilen dosya çok küçük veya boş. Yazma yapılmadı.")
               else:
-                  print(f"Hata: Beklenen boyut alınamadı. Alınan: {content_size} byte. Durum: {response.status_code}")
-                  # Hata durumunda boş dosya oluşturup akışı bozmayalım
-                  if not os.path.exists("tv.m3u"):
-                      open("tv.m3u", "a").close()
+                  print(f"Hata: Sunucu {response.status_code} kodu döndürdü. Link patlamış olabilir.")
           except Exception as e:
-              print(f"Hata oluştu: {e}")
+              print(f"Bağlantı hatası: {e}")
 
-      - name: Git Push
+      - name: Değişiklikleri Kaydet ve Pushla
         run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
-          git add tv.m3u
-          if git diff --cached --quiet; then
-            echo "Değişiklik yok."
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Dosya indirilmemişse boş dosya hatası almamak için kontrol
+          if [ -f tv.m3u ]; then
+            git add tv.m3u
+            if git diff --cached --quiet; then
+              echo "Herhangi bir değişiklik tespit edilmedi."
+            else
+              git commit -m "Oto-Güncelleme: tv.m3u yenilendi"
+              git push
+            fi
           else
-            git commit -m "M3U Listesi Güncellendi (${{ github.run_number }})"
-            git push
+            echo "Dosya bulunamadı, işlem iptal."
           fi
